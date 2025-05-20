@@ -1,75 +1,131 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, Image, StyleSheet, ActivityIndicator, Button } from 'react-native';
+import axios from 'axios';
+import { useRouter } from 'expo-router';
+import { Pressable } from 'react-native';
+import { TextInput } from 'react-native';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+// --- Interface pour un pays ---
+interface Country {
+  cca3: string;
+  name: {
+    common: string;
+  };
+  flags: {
+    png: string;
+    svg: string;
+  };
+}
 
 export default function HomeScreen() {
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [visibleCount, setVisibleCount] = useState<number>(20);
+  const router = useRouter();
+  const [search, setSearch] = useState('');
+  const [filteredCountries, setFilteredCountries] = useState<Country[]>([]);
+
+
+  useEffect(() => {
+    axios.get<Country[]>('https://restcountries.com/v3.1/all')
+      .then(response => {
+        const sorted = response.data.sort((a: Country, b: Country) =>
+          a.name.common.localeCompare(b.name.common)
+        );
+        setCountries(sorted);
+        setLoading(false);
+      })
+      .catch(error => {
+        console.error('Erreur lors de la récupération des pays:', error);
+        setLoading(false);
+      });
+  }, []);
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + 20);
+  };
+
+  useEffect(() => {
+    const results = countries.filter((country) =>
+      country.name.common.toLowerCase().includes(search.toLowerCase())
+    );
+    setFilteredCountries(results);
+  }, [search, countries]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#0000ff" />
+        <Text>Chargement des pays...</Text>
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <View style={{ flex: 1 }}>
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Rechercher un pays..."
+        value={search}
+        onChangeText={setSearch}
+      />
+      <FlatList
+        data={filteredCountries.slice(0, visibleCount)}
+        keyExtractor={(item) => item.cca3}
+        renderItem={({ item }) => (
+          <Pressable onPress={() => router.push({ pathname: '/country/[code]', params: { code: item.cca3 } })}>
+            <View style={styles.countryItem}>
+              <Image source={{ uri: item.flags.png }} style={styles.flag} />
+              <Text style={styles.name}>{item.name.common}</Text>
+            </View>
+          </Pressable>
+        )}
+        
+      />
+      {visibleCount < countries.length && (
+        <View style={styles.loadMore}>
+          <Button title="Afficher plus" onPress={handleLoadMore} />
+        </View>
+      )}
+    </View>
+
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  countryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    padding: 10,
+    borderBottomWidth: 0.5,
+    borderColor: '#ccc',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  flag: {
+    width: 40,
+    height: 25,
+    marginRight: 10,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  name: {
+    fontSize: 16,
+  },
+  loadMore: {
+    padding: 10,
+    alignItems: 'center',
+  },
+  searchInput: {
+    height: 40,                 // Hauteur fixe
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,         // Pour éviter l’effet "rapetissé"
+    margin: 10,
+    fontSize: 16,
+    textAlignVertical: 'center' // Pour Android
   },
 });
